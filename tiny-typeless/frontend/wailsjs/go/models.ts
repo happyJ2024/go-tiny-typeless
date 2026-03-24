@@ -36,6 +36,20 @@ export namespace main {
 	        this.message = source["message"];
 	    }
 	}
+	export class Statistics {
+	    last_transcription_tokens: number;
+	    total_transcription_tokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Statistics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.last_transcription_tokens = source["last_transcription_tokens"];
+	        this.total_transcription_tokens = source["total_transcription_tokens"];
+	    }
+	}
 
 }
 

@@ -10,8 +10,16 @@ export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
 
+export function GetStatistics() {
+  return window['go']['main']['App']['GetStatistics']();
+}
+
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
+}
+
+export function ResetStatistics() {
+  return window['go']['main']['App']['ResetStatistics']();
 }
 
 export function SaveSettings(arg1) {

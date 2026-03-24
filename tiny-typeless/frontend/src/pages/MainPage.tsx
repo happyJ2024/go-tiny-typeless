@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { Waveform } from '../components/Waveform';
 import { LogConsole } from '../components/LogConsole';
 import type { LogEntry } from '../hooks/useAppLogs';
 import { TranscribeAudio } from '../../wailsjs/go/main/App';
+import { getStatistics } from '../lib/backend';
 
 interface MainPageProps {
     logs: LogEntry[];
@@ -15,6 +16,20 @@ const MainPage = ({ logs, onClearLogs }: MainPageProps) => {
     const [transcriptionText, setTranscriptionText] = useState('');
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [error, setError] = useState('');
+    const [lastUsedTokens, setLastUsedTokens] = useState<number | null>(null);
+
+    const refreshStatistics = useCallback(async () => {
+        try {
+            const stats = await getStatistics();
+            setLastUsedTokens(stats.last_transcription_tokens);
+        } catch (statsError) {
+            console.warn('Failed to load usage statistics', statsError);
+        }
+    }, []);
+
+    useEffect(() => {
+        refreshStatistics();
+    }, [refreshStatistics]);
 
     const handleStartRecording = useCallback(async () => {
         setError('');
@@ -46,6 +61,7 @@ const MainPage = ({ logs, onClearLogs }: MainPageProps) => {
                         const mimeType = audioBlob.type || 'audio/webm';
                         const transcription = await TranscribeAudio(base64Audio, mimeType);
                         setTranscriptionText(transcription);
+                        await refreshStatistics();
                         console.info('Transcription completed');
                     } catch (err) {
                         const message = err instanceof Error ? err.message : 'Transcription failed';
@@ -134,6 +150,12 @@ const MainPage = ({ logs, onClearLogs }: MainPageProps) => {
             <div className="transcription-section">
                 <div className="transcription-header">
                     <h2>Transcription</h2>
+                    <div className="transcription-meta">
+                        {lastUsedTokens !== null && (
+                            <span className="token-chip">
+                                Last: {lastUsedTokens.toLocaleString()} tokens
+                            </span>
+                        )}
                     {transcriptionText && (
                         <div className="transcription-buttons">
                             <button className="btn btn-sm" onClick={handleCopyText}>
@@ -144,6 +166,7 @@ const MainPage = ({ logs, onClearLogs }: MainPageProps) => {
                             </button>
                         </div>
                     )}
+                    </div>
                 </div>
                 <textarea 
                     className="transcription-textarea"

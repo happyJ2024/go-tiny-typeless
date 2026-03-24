@@ -15,7 +15,12 @@ import (
 
 // Transcriber interface defines the contract for audio transcription
 type Transcriber interface {
-	Transcribe(audioData []byte, mimeType string) (string, error)
+	Transcribe(audioData []byte, mimeType string) (TranscriptionResult, error)
+}
+
+type TranscriptionResult struct {
+	Text       string
+	UsedTokens int64
 }
 
 // GeminiTranscriber implements Transcriber using Google's Gemini API
@@ -116,9 +121,9 @@ func testProxyConnection(proxy string) (string, error) {
 }
 
 // Transcribe converts audio data to text using Gemini API
-func (g *GeminiTranscriber) Transcribe(audioData []byte, mimeType string) (string, error) {
+func (g *GeminiTranscriber) Transcribe(audioData []byte, mimeType string) (TranscriptionResult, error) {
 	if g.client == nil {
-		return "", fmt.Errorf("gemini client is not initialized")
+		return TranscriptionResult{}, fmt.Errorf("gemini client is not initialized")
 	}
 
 	if mimeType == "" {
@@ -137,23 +142,31 @@ func (g *GeminiTranscriber) Transcribe(audioData []byte, mimeType string) (strin
 	)
 
 	if err != nil {
-		return "", err
+		return TranscriptionResult{}, err
 	}
 
 	if len(resp.Candidates) == 0 {
-		return "", fmt.Errorf("no candidates returned from API")
+		return TranscriptionResult{}, fmt.Errorf("no candidates returned from API")
 	}
 
 	if len(resp.Candidates[0].Content.Parts) == 0 {
-		return "", fmt.Errorf("no content parts returned")
+		return TranscriptionResult{}, fmt.Errorf("no content parts returned")
+	}
+
+	var usedTokens int64
+	if resp.UsageMetadata != nil {
+		usedTokens = int64(resp.UsageMetadata.TotalTokenCount)
 	}
 
 	content := resp.Candidates[0].Content.Parts[0]
 	if text, ok := content.(genai.Text); ok {
-		return string(text), nil
+		return TranscriptionResult{
+			Text:       string(text),
+			UsedTokens: usedTokens,
+		}, nil
 	}
 
-	return "", fmt.Errorf("unexpected response type")
+	return TranscriptionResult{}, fmt.Errorf("unexpected response type")
 }
 
 // Close closes the Gemini client

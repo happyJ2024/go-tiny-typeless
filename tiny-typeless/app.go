@@ -17,6 +17,11 @@ type LogEntry struct {
 	Message   string `json:"message"`
 }
 
+type Statistics struct {
+	LastTranscriptionTokens  int64 `json:"last_transcription_tokens"`
+	TotalTranscriptionTokens int64 `json:"total_transcription_tokens"`
+}
+
 // App struct
 type App struct {
 	ctx          context.Context
@@ -62,6 +67,26 @@ func (a *App) GetSettings() (Config, error) {
 
 	a.logInfo("backend", "settings loaded")
 	return cfg, nil
+}
+
+func (a *App) GetStatistics() (Statistics, error) {
+	stats, err := LoadStatistics()
+	if err != nil {
+		a.logError("backend", "failed to load statistics: %v", err)
+		return Statistics{}, err
+	}
+
+	return stats, nil
+}
+
+func (a *App) ResetStatistics() error {
+	if err := SaveStatistics(DefaultStatistics()); err != nil {
+		a.logError("backend", "failed to reset statistics: %v", err)
+		return err
+	}
+
+	a.logInfo("backend", "statistics reset")
+	return nil
 }
 
 func (a *App) GetLogs() []LogEntry {
@@ -133,16 +158,20 @@ func (a *App) TranscribeAudio(audioBase64 string, mimeType string) (string, erro
 	a.logInfo("backend", "starting transcription for %d bytes of audio (%s)", len(audioData), mimeType)
 
 	// Call transcriber
-	text, err := a.transcriber.Transcribe(audioData, mimeType)
+	result, err := a.transcriber.Transcribe(audioData, mimeType)
 	if err != nil {
 		wrappedErr := fmt.Errorf("transcription failed: %w", err)
 		a.logError("backend", "%v", wrappedErr)
 		return "", wrappedErr
 	}
 
-	a.logInfo("backend", "transcription completed successfully")
+	if err := a.updateTokenStats(result.UsedTokens); err != nil {
+		a.logError("backend", "failed to update token statistics: %v", err)
+	}
 
-	return text, nil
+	a.logInfo("backend", "transcription completed successfully (tokens=%d)", result.UsedTokens)
+
+	return result.Text, nil
 }
 
 // Greet returns a greeting for the given name (legacy method for testing)
@@ -197,4 +226,20 @@ func (a *App) logInfo(source, format string, args ...interface{}) {
 
 func (a *App) logError(source, format string, args ...interface{}) {
 	a.appendLog("error", source, fmt.Sprintf(format, args...))
+}
+
+func (a *App) updateTokenStats(usedTokens int64) error {
+	if usedTokens < 0 {
+		usedTokens = 0
+	}
+
+	stats, err := LoadStatistics()
+	if err != nil {
+		return err
+	}
+
+	stats.LastTranscriptionTokens = usedTokens
+	stats.TotalTranscriptionTokens += usedTokens
+
+	return SaveStatistics(stats)
 }

@@ -6,7 +6,11 @@ export function GetLogs():Promise<Array<main.LogEntry>>;
 
 export function GetSettings():Promise<main.Config>;
 
+export function GetStatistics():Promise<main.Statistics>;
+
 export function Greet(arg1:string):Promise<string>;
+
+export function ResetStatistics():Promise<void>;
 
 export function SaveSettings(arg1:main.Config):Promise<void>;
 

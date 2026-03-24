@@ -14,6 +14,13 @@ export const Waveform: React.FC<WaveformProps> = ({ audioLevel, isRecording }) =
     const historyRef = useRef<number[]>([]);
     const hueRef = useRef<number>(200); // blue hue
 
+    const getAmplifiedLevel = (rawLevel: number) => {
+        // Lift lower levels and apply stronger gain so speech movement is visible.
+        const normalized = Math.min(Math.max(rawLevel, 0), 1);
+        const lifted = Math.pow(normalized, 0.55);
+        return Math.min(1, lifted * 1.75);
+    };
+
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -51,7 +58,8 @@ export const Waveform: React.FC<WaveformProps> = ({ audioLevel, isRecording }) =
 
                 historyRef.current.forEach((level, index) => {
                     const x = index;
-                    const amplitude = level * centerY * 0.8;
+                    const amplified = getAmplifiedLevel(level);
+                    const amplitude = amplified * centerY * 0.95;
                     const y = centerY - amplitude;
 
                     if (index === 0) {
@@ -63,11 +71,27 @@ export const Waveform: React.FC<WaveformProps> = ({ audioLevel, isRecording }) =
 
                 ctx.stroke();
 
-                // Draw filled area
-                ctx.strokeStyle = `hsla(${hueRef.current}, 80%, 50%, 0.3)`;
+                // Draw mirrored filled area around baseline for a more obvious waveform.
                 ctx.fillStyle = `hsla(${hueRef.current}, 80%, 50%, 0.1)`;
-                ctx.lineTo(width, centerY);
-                ctx.lineTo(0, centerY);
+                ctx.beginPath();
+
+                historyRef.current.forEach((level, index) => {
+                    const amplitude = getAmplifiedLevel(level) * centerY * 0.95;
+                    const yTop = centerY - amplitude;
+
+                    if (index === 0) {
+                        ctx.moveTo(index, yTop);
+                    } else {
+                        ctx.lineTo(index, yTop);
+                    }
+                });
+
+                for (let i = historyRef.current.length - 1; i >= 0; i -= 1) {
+                    const amplitude = getAmplifiedLevel(historyRef.current[i]) * centerY * 0.95;
+                    const yBottom = centerY + amplitude;
+                    ctx.lineTo(i, yBottom);
+                }
+
                 ctx.closePath();
                 ctx.fill();
             } else {
@@ -94,10 +118,14 @@ export const Waveform: React.FC<WaveformProps> = ({ audioLevel, isRecording }) =
             if (audioLevel.peak > 0) {
                 ctx.strokeStyle = `hsla(${hueRef.current}, 100%, 60%, 0.8)`;
                 ctx.lineWidth = 2;
-                const peakY = centerY - audioLevel.peak * centerY * 0.8;
+                const peakAmplitude = getAmplifiedLevel(audioLevel.peak) * centerY * 0.95;
+                const peakYTop = centerY - peakAmplitude;
+                const peakYBottom = centerY + peakAmplitude;
                 ctx.beginPath();
-                ctx.moveTo(0, peakY);
-                ctx.lineTo(width, peakY);
+                ctx.moveTo(0, peakYTop);
+                ctx.lineTo(width, peakYTop);
+                ctx.moveTo(0, peakYBottom);
+                ctx.lineTo(width, peakYBottom);
                 ctx.stroke();
             }
 
@@ -117,14 +145,6 @@ export const Waveform: React.FC<WaveformProps> = ({ audioLevel, isRecording }) =
         <canvas
             ref={canvasRef}
             className="waveform-canvas"
-            style={{
-                width: '100%',
-                height: '200px',
-                display: 'block',
-                borderRadius: '8px',
-                background: 'rgba(27, 38, 54, 0.5)',
-                border: '1px solid rgba(100, 120, 140, 0.3)'
-            }}
         />
     );
 };
